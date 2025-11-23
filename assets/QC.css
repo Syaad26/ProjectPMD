@@ -262,6 +262,8 @@ button:hover {
   max-height: 85vh;
   overflow: auto;
   color: #eaf6ff;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .modal-pass {
   color: var(--success);
@@ -271,7 +273,29 @@ button:hover {
   color: var(--danger);
   font-weight: 800;
 }
-
+/* modal summary styling: tiap ukuran jadi baris sendiri, bungkus teks */
+#modalSummaryList {
+  margin-top: 6px;
+}
+#modalSummaryList .modal-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#modalSummaryList .modal-summary-item {
+  word-break: break-word;
+  white-space: normal;
+  font-size: 14px;
+  color: #eaf6ff;
+}
+#modalSummaryList .modal-summary-item .ms-name {
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: 6px;
+}
+#modalSummaryList .modal-summary-item .ms-text {
+  color: var(--muted);
+}
 /* small responsive tweaks */
 @media (max-width: 820px) {
   nav {

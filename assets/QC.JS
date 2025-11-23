@@ -369,15 +369,25 @@ function openModal(idx) {
     return;
   }
   $("modalBenda").textContent = part.benda || "-";
+
   const m = part.measurements || {};
-  $("modalSummaryList").textContent = Object.keys(m)
-    .map(
-      (k) =>
-        `${k.charAt(0).toUpperCase() + k.slice(1)}: Std ${
-          m[k].standar || "-"
-        } Tol ±${m[k].toleransi || "-"} Hasil ${m[k].hasil || "-"}`
-    )
-    .join(" | ");
+
+  // NEW: render ringkasan sebagai daftar (satu baris per ukuran) sehingga tidak overflow ke kanan
+  const summaryItems = Object.keys(m)
+    .map((k) => {
+      const mm = m[k] || {};
+      const name = k.charAt(0).toUpperCase() + k.slice(1);
+      const std = mm.standar || "-";
+      const tol = mm.toleransi || "-";
+      const hasil = mm.hasil || "-";
+      return `<div class="modal-summary-item"><span class="ms-name">${name}</span>: <span class="ms-text">Std ${std} &nbsp; Tol ±${tol} &nbsp; Hasil ${hasil}</span></div>`;
+    })
+    .join("");
+  $(
+    "modalSummaryList"
+  ).innerHTML = `<div class="modal-summary">${summaryItems}</div>`;
+
+  // detail (tetap ada, sudah block)
   const detailHtml = Object.keys(m)
     .map((k) => {
       const mm = m[k] || {};
@@ -388,15 +398,15 @@ function openModal(idx) {
           ? '<span class="modal-pass">PASS</span>'
           : ok === false
           ? '<span class="modal-fail">FAIL</span>'
-          : '<span style="color:#999">N/A</span>'; // KOREKSI: Gunakan toFixed(2) untuk tampilan detail
+          : '<span style="color:#999">N/A</span>';
       const pctText =
-        pct === null
+        pct === null || isNaN(pct)
           ? ok === true
             ? "100.00%"
             : ok === false
             ? "0.00%"
             : "N/A"
-          : `${pct.toFixed(2)}%`;
+          : `${Number(pct).toFixed(2)}%`;
       return `<div style="margin-bottom:8px;"><b>${
         k.charAt(0).toUpperCase() + k.slice(1)
       }</b><br>Std: ${mm.standar || "-"} | Tol: ±${
@@ -405,6 +415,7 @@ function openModal(idx) {
     })
     .join("");
   $("modalDetail").innerHTML = detailHtml;
+
   $("qcModal").style.display = "flex";
   renderModalChart(item);
 }
