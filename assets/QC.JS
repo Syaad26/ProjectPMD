@@ -1,5 +1,5 @@
 // ===============================
-//   DATA QC
+//   DATA QC
 // ===============================
 let qcList = [];
 
@@ -22,30 +22,132 @@ const tinggiHasil = document.getElementById("tinggiHasil");
 
 // helpers (fokus: ringkas & aman)
 const toNum = (v) => {
-  const n = parseFloat(String(v).trim());
+  if (v === null || v === undefined) return null; // hapus semua karakter selain digit, titik, tanda +/-, dan exponent
+  const cleaned = String(v)
+    .replace(/[^0-9+\-eE.,]/g, "")
+    .replace(",", ".")
+    .trim();
+  if (cleaned === "") return null;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Parse three numeric inputs and return either scaled-integers or raw numbers.
+ * - Handles comma as decimal, strips ± and text.
+ * - If any value uses exponent notation (e/E) we fallback to Number-based path.
+ * - Decimals are scaled up to `maxDecimals` (caps at 8) to perform integer math.
+ */
+function _prepareScaled(std, tol, val, maxDecimals = 8) {
+  const clean = (x) =>
+    String(x ?? "")
+      .replace(/±/g, "")
+      .replace(/[^0-9+\-eE.,]/g, "")
+      .replace(",", ".")
+      .trim();
+
+  const sStr = clean(std),
+    tStr = clean(tol),
+    hStr = clean(val);
+
+  if (!sStr || !tStr || !hStr) return null; // if exponent forms present, fallback to Number arithmetic (still safe)
+
+  if (/[eE]/.test(sStr + tStr + hStr)) {
+    const s = Number(sStr),
+      t = Number(tStr),
+      h = Number(hStr);
+    if (![s, t, h].every(Number.isFinite)) return null;
+    return { scaled: false, s, t, h, scale: 1 };
+  }
+
+  const decimals = (str) => {
+    const m = str.match(/\.(\d+)/);
+    return m ? m[1].length : 0;
+  };
+  const dec = Math.min(
+    maxDecimals,
+    Math.max(decimals(sStr), decimals(tStr), decimals(hStr))
+  );
+  const scale = Math.pow(10, dec);
+
+  const s = Math.round(Number(sStr) * scale);
+  const t = Math.round(Number(tStr) * scale);
+  const h = Math.round(Number(hStr) * scale);
+
+  if (![s, t, h].every((n) => Number.isInteger(n))) return null;
+  return { scaled: true, s, t, h, scale };
+}
+
 function checkPass(std, tol, val) {
-  const s = toNum(std),
-    t = toNum(tol),
-    h = toNum(val);
-  if (s === null || t === null || h === null) return null;
-  return Math.abs(h - s) <= Math.abs(t);
+  const p = _prepareScaled(std, tol, val);
+  if (!p) return null;
+  if (!p.scaled) {
+    // fallback Number path (inclusive)
+    return Math.abs(p.h - p.s) <= Math.abs(p.t);
+  }
+  const diff = Math.abs(p.h - p.s);
+  const absT = Math.abs(p.t);
+  return diff <= absT;
 }
+
+/**
+ * FUNGSI INI SUDAH DIKOREKSI (AKURASI DESIMAL)
+ * Menghitung kesesuaian secara proporsional: 100.00% (ideal) hingga 1.00% (batas toleransi).
+ * Hasil dikembalikan sebagai Number dengan akurasi 2 desimal.
+ */
 function percentMatch(std, tol, val) {
-  const s = toNum(std),
-    t = toNum(tol),
-    h = toNum(val);
-  if (s === null || t === null || h === null) return null;
-  if (Math.abs(t) === 0) return Math.abs(h - s) === 0 ? 100 : 0;
-  const diff = Math.min(Math.abs(h - s), Math.abs(t));
-  return Math.round((1 - diff / Math.abs(t)) * 100);
+  const p = _prepareScaled(std, tol, val);
+  if (!p) return null;
+
+  // Definisikan skor minimum untuk komponen yang masih Lolos
+  const MIN_SCORE = 1.0;
+  const SCORE_RANGE = 100.0 - MIN_SCORE; // Rentang skor proporsional adalah 99.0
+
+  let absT, diff;
+
+  // Fungsi pembulatan ke 2 desimal
+  const round2 = (num) => Math.round(num * 100) / 100;
+
+  // --- JALUR 1: STANDARD NUMBER (FLOAT) ARITHMETIC ---
+  if (!p.scaled) {
+    absT = Math.abs(p.t);
+    diff = Math.abs(p.h - p.s);
+
+    if (absT === 0) return diff === 0 ? 100.0 : 0.0;
+
+    if (diff <= absT) {
+      const ratio = 1 - diff / absT;
+      const score = MIN_SCORE + SCORE_RANGE * ratio;
+
+      return round2(Math.max(MIN_SCORE, score));
+    }
+
+    return 0.0;
+  }
+
+  // --- JALUR 2: SCALED INTEGER ARITHMETIC (Math Aman) ---
+  diff = Math.abs(p.h - p.s);
+  absT = Math.abs(p.t);
+
+  if (absT === 0) return diff === 0 ? 100.0 : 0.0;
+
+  if (diff <= absT) {
+    const proportionalScore = (SCORE_RANGE * (absT - diff)) / absT;
+    const finalScore = MIN_SCORE + proportionalScore;
+
+    return round2(Math.max(MIN_SCORE, Math.min(100.0, finalScore)));
+  }
+
+  return 0.0;
 }
+
 function partPercent(part) {
   const keys = ["panjang", "lebar", "tinggi"];
   let sum = 0,
     cnt = 0;
+  // Fungsi pembulatan ke 2 desimal
+  const round2 = (num) => Math.round(num * 100) / 100;
+
   keys.forEach((k) => {
     const m = (part.measurements && part.measurements[k]) || {};
     const p = percentMatch(m.standar, m.toleransi, m.hasil);
@@ -55,15 +157,15 @@ function partPercent(part) {
     } else {
       const ok = checkPass(m.standar, m.toleransi, m.hasil);
       if (ok === true) {
-        sum += 100;
+        sum += 100.0;
         cnt++;
       } else if (ok === false) {
-        sum += 0;
+        sum += 0.0;
         cnt++;
       }
     }
-  });
-  return cnt ? Math.round(sum / cnt) : 0;
+  }); // Pembulatan rata-rata akhir ke 2 desimal
+  return cnt ? round2(sum / cnt) : 0.0;
 }
 
 // save single-part QC
@@ -94,8 +196,7 @@ saveBtn.addEventListener("click", () => {
     parts: [part],
   });
   renderList();
-  updateDashboardChart();
-  // reset
+  updateDashboardChart(); // reset
   [
     namaInput,
     tanggalInput,
@@ -116,19 +217,21 @@ saveBtn.addEventListener("click", () => {
 function renderList() {
   listContainer.innerHTML = "";
   qcList.forEach((item, i) => {
+    // Menghitung rata-rata (tanpa pembulatan awal)
     const avg =
       item.parts && item.parts.length
-        ? Math.round(
-            item.parts.reduce((s, p) => s + partPercent(p), 0) /
-              item.parts.length
-          )
-        : 0;
+        ? item.parts.reduce((s, p) => s + partPercent(p), 0) / item.parts.length
+        : 0.0;
+
     const div = document.createElement("div");
     div.className = "qc-card";
     div.style.cursor = "pointer";
+    // Menggunakan toFixed(2) untuk tampilan 2 desimal
     div.innerHTML = `<h3>QC-${i + 1}</h3><div>Pemeriksa: ${
       item.nama
-    }</div><div>Tanggal: ${item.tanggal}</div><div>Kesesuaian: ${avg}%</div>`;
+    }</div><div>Tanggal: ${item.tanggal}</div><div>Kesesuaian: ${avg.toFixed(
+      2
+    )}%</div>`;
     div.addEventListener("click", () => openModal(item));
     listContainer.appendChild(div);
   });
@@ -142,9 +245,7 @@ function updateDashboardChart() {
   const labels = qcList.map((_, i) => `QC-${i + 1}`);
   const data = qcList.map((it) =>
     it.parts && it.parts.length
-      ? Math.round(
-          it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length
-        )
+      ? it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length // tidak dibulatkan
       : 0
   );
   const ctx = document.getElementById("qcChart");
@@ -179,10 +280,9 @@ function renderModalChart(item) {
   if (!part) return;
   const m = part.measurements || {};
   const data = ["panjang", "lebar", "tinggi"].map((k) => {
-    return (
-      percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ??
-      (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0)
-    );
+    const p = percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil);
+    // gunakan nilai decimal dari percentMatch, fallback ke 100/0 sesuai checkPass
+    return p ?? (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0);
   });
   const colors = data.map((v) =>
     v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
@@ -229,10 +329,10 @@ function openModal(item) {
   } | Tol: ±${m.panjang?.toleransi || "-"} | Hasil: ${m.panjang?.hasil || "-"}`;
   document.getElementById("modalLebar").textContent = `Std: ${
     m.lebar?.standar || "-"
-  }   | Tol: ±${m.lebar?.toleransi || "-"}   | Hasil: ${m.lebar?.hasil || "-"}`;
+  }   | Tol: ±${m.lebar?.toleransi || "-"}   | Hasil: ${m.lebar?.hasil || "-"}`;
   document.getElementById("modalTinggi").textContent = `Std: ${
     m.tinggi?.standar || "-"
-  }  | Tol: ±${m.tinggi?.toleransi || "-"}  | Hasil: ${m.tinggi?.hasil || "-"}`;
+  }  | Tol: ±${m.tinggi?.toleransi || "-"}  | Hasil: ${m.tinggi?.hasil || "-"}`;
 
   const detailHtml = ["panjang", "lebar", "tinggi"]
     .map((k) => {
@@ -248,11 +348,11 @@ function openModal(item) {
       const pctText =
         pct === null
           ? ok === true
-            ? "100"
+            ? "100.00"
             : ok === false
-            ? "0"
+            ? "0.00"
             : "N/A"
-          : `${pct}%`;
+          : `${pct.toFixed(2)}%`;
       return `<div style="margin-bottom:8px;"><b>${
         k.charAt(0).toUpperCase() + k.slice(1)
       }</b><br>Std: ${mm.standar || "-"} | Tol: ±${
