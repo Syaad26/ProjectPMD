@@ -1,0 +1,198 @@
+/* Clean modern landing styles */
+:root {
+  --bg1: linear-gradient(135deg, #e9f2ff 0%, #ffffff 60%);
+  --accent: #6ad1ff; /* aksen cerah */
+  --accent-700: #0aa3ff;
+  --muted: #bcd5ee;
+  --bg-dim: rgba(2, 18, 45, 0.64);
+  --glass: rgba(255, 255, 255, 0.06);
+  --card-radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: "Poppins", system-ui, Segoe UI, Roboto, Arial;
+  color: #102036;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: var(--bg1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* disable page scrolling and make hero exactly viewport height */
+html,
+body {
+  height: 100vh; /* pastikan 1 viewport tinggi */
+  margin: 0;
+  overflow: hidden; /* non-scrollable */
+}
+
+/* HERO full-bleed */
+.hero {
+  position: relative;
+  height: 100vh; /* paksa hero mengisi seluruh viewport */
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* potong decorative blobs agar tidak memicu scroll */
+  padding: 28px 20px;
+
+  /* background image (path relatif terhadap file CSS: assets/homebg.jpg) */
+  background-color: #07122a;
+  background-image: url("./homebg.jpg");
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* overlay gelap kebiruan agar teks mudah dibaca dan match tema blueprint */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 12, 34, 0.72),
+    rgba(2, 18, 45, 0.48)
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* card di tengah jadi semi-transparant gelap + glass blur untuk feel industrial */
+.hero-inner {
+  position: relative;
+  z-index: 3;
+  max-width: 980px;
+  width: calc(100% - 40px);
+  text-align: center;
+  background: linear-gradient(
+    180deg,
+    rgba(7, 18, 40, 0.72),
+    rgba(5, 15, 35, 0.62)
+  );
+  padding: 36px 32px;
+  border-radius: var(--card-radius);
+  box-shadow: 0 30px 80px rgba(3, 18, 40, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-sizing: border-box;
+  backdrop-filter: blur(6px);
+  color: #eaf6ff; /* teks terang */
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+/* judul & teks agar kontras di atas background blueprint */
+.brand {
+  margin: 0 0 10px 0;
+  font-size: 44px;
+  letter-spacing: -0.6px;
+  color: var(--accent);
+  font-weight: 800;
+  text-shadow: 0 6px 26px rgba(2, 10, 25, 0.55);
+}
+.lead {
+  margin: 0 0 20px 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* tombol utama: warna aksen cerah tetap kontras */
+.enter-btn {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--accent), var(--accent-700));
+  color: #042033;
+  padding: 14px 22px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 18px 44px rgba(10, 150, 255, 0.12);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.enter-btn:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 28px 64px rgba(10, 150, 255, 0.18);
+}
+
+/* meta teks lebih lembut */
+.meta {
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(180, 205, 235, 0.9);
+}
+
+/* reduce prominence of decorative blobs so they don't clash with image */
+.blob {
+  display: none;
+}
+
+/* footer tetap di dalam viewport, teks terang */
+.home-footer {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  text-align: center;
+  padding: 10px 16px;
+  color: #eaf6ff; /* teks terang untuk kontras */
+  background: rgba(5, 15, 35, 0.78); /* gelapkan sedikit area di bawah teks */
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(3, 18, 40, 0.6);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 6; /* pastikan di atas hero-inner */
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+/* link di footer tetap pakai warna aksen agar menonjol */
+.home-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+/* responsive: kurangi ukuran dan padding di layar kecil */
+@media (max-width: 420px) {
+  .home-footer {
+    bottom: 12px;
+    padding: 8px 10px;
+    font-size: 13px;
+    white-space: normal;
+    width: calc(100% - 32px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* responsive tweaks: adjust sizes so content never overflows */
+@media (max-width: 720px) {
+  .hero-inner {
+    padding: 18px;
+    max-height: calc(100vh - 40px);
+  }
+  .brand {
+    font-size: 28px;
+  }
+  .lead {
+    font-size: 14px;
+  }
+  .enter-btn {
+    width: 100%;
+    padding: 12px;
+  }
+}
+
+/* tetap hilangkan scroll horizontal */
+body,
+.hero {
+  overflow-x: hidden;
+}

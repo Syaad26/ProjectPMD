@@ -3,320 +3,415 @@
 // ===============================
 let qcList = [];
 
+const namaInput = document.getElementById("namaInput");
+const tanggalInput = document.getElementById("tanggalInput");
+const saveBtn = document.getElementById("saveBtn");
+const listContainer = document.getElementById("qcList");
 
-// ===============================
-//   ELEMEN FORM UTAMA
-// ===============================
-const namaInput       = document.getElementById("namaInput");
-const saveBtn         = document.getElementById("saveBtn");
-const tanggalInput    = document.getElementById("tanggalInput");
-const listContainer   = document.getElementById("qcList");
+// measurement inputs
+const bendaNameInput = document.getElementById("bendaNameInput");
+const panjangStandar = document.getElementById("panjangStandar");
+const panjangToleransi = document.getElementById("panjangToleransi");
+const panjangHasil = document.getElementById("panjangHasil");
+const lebarStandar = document.getElementById("lebarStandar");
+const lebarToleransi = document.getElementById("lebarToleransi");
+const lebarHasil = document.getElementById("lebarHasil");
+const tinggiStandar = document.getElementById("tinggiStandar");
+const tinggiToleransi = document.getElementById("tinggiToleransi");
+const tinggiHasil = document.getElementById("tinggiHasil");
 
-// Tambahan: elemen untuk menambah part
-const addPartBtn      = document.getElementById("addPartBtn");
-const extraParts      = document.getElementById("extraParts");
+// helpers (fokus: ringkas & aman)
+const toNum = (v) => {
+  const n = parseFloat(String(v).trim());
+  return Number.isFinite(n) ? n : null;
+};
 
-function createPartNode() {
-    const wrapper = document.createElement("div");
-    wrapper.className = "extra-part";
-    wrapper.style.marginTop = "12px";
-    wrapper.innerHTML = `
-        <div class="form-group">
-            <label>Benda Kerja (tambahan)</label>
-            <input type="text" class="bendaKerja" placeholder="Benda kerja" />
-        </div>
-
-        <div class="form-group">
-            <label>Jenis Proses</label>
-            <select class="prosesInput">
-                <option>Milling</option>
-                <option>Turning</option>
-                <option>Grinding</option>
-                <option>Inspection Only</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label>Standar</label>
-            <input type="text" class="kodeStandar" placeholder="Standar" />
-        </div>
-
-        <div class="form-group">
-            <label>Toleransi</label>
-            <input type="text" class="kodeToleransi" placeholder="Toleransi" />
-        </div>
-
-        <div class="form-group">
-            <label>Hasil Pemeriksaan</label>
-            <input type="text" class="hasilPemeriksaan" placeholder="Hasil" />
-        </div>
-
-        <button type="button" class="removePartBtn">Hapus Benda</button>
-        <hr />
-    `;
-
-    const removeBtn = wrapper.querySelector(".removePartBtn");
-    removeBtn.addEventListener("click", () => wrapper.remove());
-
-    return wrapper;
+function checkPass(std, tol, val) {
+  const s = toNum(std),
+    t = toNum(tol),
+    h = toNum(val);
+  if (s === null || t === null || h === null) return null;
+  return Math.abs(h - s) <= Math.abs(t);
 }
-
-addPartBtn.addEventListener("click", () => {
-    extraParts.appendChild(createPartNode());
-});
-
-// ===============================
-//   SIMPAN DATA
-// ===============================
-saveBtn.addEventListener("click", () => {
-
-    // Ambil nilai dari form utama
-    const mainBenda    = document.getElementById("bendaKerja").value;
-    const mainProses   = document.getElementById("prosesInput").value;
-    const mainStandar  = document.getElementById("kodeStandar").value;
-    const mainToleransi= document.getElementById("kodeToleransi").value;
-    const mainHasil    = document.getElementById("hasilPemeriksaan").value;
-
-    // Ambil semua part tambahan (jika ada)
-    const extraBendaArr     = [...document.querySelectorAll("#extraParts .bendaKerja")].map(e => e.value);
-    const extraProsesArr    = [...document.querySelectorAll("#extraParts .prosesInput")].map(e => e.value);
-    const extraStandarArr   = [...document.querySelectorAll("#extraParts .kodeStandar")].map(e => e.value);
-    const extraToleransiArr = [...document.querySelectorAll("#extraParts .kodeToleransi")].map(e => e.value);
-    const extraHasilArr     = [...document.querySelectorAll("#extraParts .hasilPemeriksaan")].map(e => e.value);
-
-    // Gabungkan nilai utama + tambahan
-    const bendaArr     = [mainBenda, ...extraBendaArr].filter(v => v !== undefined && v !== "");
-    const prosesArr    = [mainProses, ...extraProsesArr].filter(v => v !== undefined && v !== "");
-    const standarArr   = [mainStandar, ...extraStandarArr].filter(v => v !== undefined && v !== "");
-    const toleransiArr = [mainToleransi, ...extraToleransiArr].filter(v => v !== undefined && v !== "");
-    const hasilArr     = [mainHasil, ...extraHasilArr].filter(v => v !== undefined && v !== "");
-
-    // Buat array part (panjang mengikuti bendaArr)
-    const parts = bendaArr.map((_, i) => ({
-        benda: bendaArr[i] || "",
-        proses: prosesArr[i] || "",
-        standar: standarArr[i] || "",
-        toleransi: toleransiArr[i] || "",
-        hasil: hasilArr[i] || ""
-    }));
-
-    // Simpan data QC
-    const data = {
-        nama: namaInput.value,
-        tanggal: tanggalInput.value,
-        parts: parts
-    };
-
-    qcList.push(data);
-    renderList();
-
-    // update grafik dashboard
-    updateDashboardChart();
-
-    // Reset form utama dan bagian tambahan
-    namaInput.value = "";
-    tanggalInput.value = "";
-    document.getElementById("bendaKerja").value = "";
-    document.getElementById("prosesInput").selectedIndex = 0;
-    document.getElementById("kodeStandar").value = "";
-    document.getElementById("kodeToleransi").value = "";
-    document.getElementById("hasilPemeriksaan").value = "";
-    document.getElementById("extraParts").innerHTML = "";
-});
-
-
-// ===============================
-//   RENDER LIST QC
-// ===============================
-function renderList() {
-    listContainer.innerHTML = "";
-
-    qcList.forEach((item, index) => {
-        const div = document.createElement("div");
-        div.className = "qc-card";
-        div.style.cursor = "pointer";
-
-        div.innerHTML = `
-            <h3>QC-${index + 1}</h3>
-            <div>Pemeriksa: ${item.nama}</div>
-            <div>Tanggal: ${item.tanggal}</div>
-            <div>Benda kerja: ${item.parts.length} item</div>
-        `;
-
-        div.addEventListener("click", () => openModal(item));
-        listContainer.appendChild(div);
-    });
+function percentMatch(std, tol, val) {
+  const s = toNum(std),
+    t = toNum(tol),
+    h = toNum(val);
+  if (s === null || t === null || h === null) return null;
+  if (Math.abs(t) === 0) return Math.abs(h - s) === 0 ? 100 : 0;
+  const diff = Math.min(Math.abs(h - s), Math.abs(t));
+  return Math.round((1 - diff / Math.abs(t)) * 100);
 }
-
-
-// ===============================
-//   MODAL
-// ===============================
-let dashboardChartInstance = null;
-let modalChartInstance = null;
-
-// Helper: cek apakah part lulus berdasarkan angka (asumsi angka)
-// mengembalikan true = lulus, false = gagal, null = tidak bisa dibandingkan (non-numeric)
-function checkPartPass(part) {
-    const s = parseFloat((part.standar || "").toString().replace(/[^0-9.\-]/g, ""));
-    const t = parseFloat((part.toleransi || "").toString().replace(/[^0-9.\-]/g, ""));
-    const h = parseFloat((part.hasil || "").toString().replace(/[^0-9.\-]/g, ""));
-    if (isNaN(s) || isNaN(t) || isNaN(h)) return null;
-    return Math.abs(h - s) <= Math.abs(t);
-}
-
-// NEW: hitung persentase kesesuaian untuk satu part
-// logika: 100% bila h == s; turun linier sampai 0% saat |h - s| >= |t|
-function partMatchPercent(part) {
-    const s = parseFloat((part.standar || "").toString().replace(/[^0-9.\-]/g, ""));
-    const t = parseFloat((part.toleransi || "").toString().replace(/[^0-9.\-]/g, ""));
-    const h = parseFloat((part.hasil || "").toString().replace(/[^0-9.\-]/g, ""));
-    if (isNaN(s) || isNaN(t) || isNaN(h) || t === 0) return null;
-    const diff = Math.abs(h - s);
-    const ratio = Math.max(0, 1 - (diff / Math.abs(t))); // 1..0
-    const percent = Math.round(ratio * 100);
-    return percent < 0 ? 0 : percent;
-}
-
-// Render atau update grafik dashboard (persentase kecocokan per QC)
-function updateDashboardChart() {
-    const labels = qcList.map((it, i) => `QC-${i+1}`);
-    const data = qcList.map(it => {
-        const parts = it.parts || [];
-        let countComparable = 0;
-        let sumPercent = 0;
-        parts.forEach(p => {
-            const pct = partMatchPercent(p);
-            if (pct !== null) { sumPercent += pct; countComparable++; }
-            else {
-                // fallback: jika tidak numeric, gunakan pass/fail biner
-                const ok = checkPartPass(p);
-                if (ok === true) { sumPercent += 100; countComparable++; }
-                else if (ok === false) { sumPercent += 0; countComparable++; }
-            }
-        });
-        return countComparable === 0 ? 0 : Math.round(sumPercent / countComparable);
-    });
-
-    const ctx = document.getElementById("qcChart");
-    if (!ctx) return;
-
-    const bg = data.map(v => v >= 80 ? '#0a9a3f' : v >= 40 ? '#f6b100' : '#d13030');
-
-    if (dashboardChartInstance) {
-        dashboardChartInstance.data.labels = labels;
-        dashboardChartInstance.data.datasets[0].data = data;
-        dashboardChartInstance.data.datasets[0].backgroundColor = bg;
-        dashboardChartInstance.update();
+function partPercent(part) {
+  const keys = ["panjang", "lebar", "tinggi"];
+  let sum = 0,
+    cnt = 0;
+  keys.forEach((k) => {
+    const m = (part.measurements && part.measurements[k]) || {};
+    const p = percentMatch(m.standar, m.toleransi, m.hasil);
+    if (p !== null) {
+      sum += p;
+      cnt++;
     } else {
-        dashboardChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Kesesuaian (%)',
-                    data: data,
-                    backgroundColor: bg,
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { beginAtZero: true, max: 100 }
-                },
-                plugins: { legend: { display: false } }
-            }
-        });
+      const ok = checkPass(m.standar, m.toleransi, m.hasil);
+      if (ok === true) {
+        sum += 100;
+        cnt++;
+      } else if (ok === false) {
+        sum += 0;
+        cnt++;
+      }
     }
+  });
+  return cnt ? Math.round(sum / cnt) : 0;
 }
 
-// Render chart modal per item: satu grafik berisi semua benda (persentase tiap benda)
+// save single-part QC
+saveBtn.addEventListener("click", () => {
+  const part = {
+    benda: bendaNameInput.value || "",
+    measurements: {
+      panjang: {
+        standar: panjangStandar.value,
+        toleransi: panjangToleransi.value,
+        hasil: panjangHasil.value,
+      },
+      lebar: {
+        standar: lebarStandar.value,
+        toleransi: lebarToleransi.value,
+        hasil: lebarHasil.value,
+      },
+      tinggi: {
+        standar: tinggiStandar.value,
+        toleransi: tinggiToleransi.value,
+        hasil: tinggiHasil.value,
+      },
+    },
+  };
+  qcList.push({
+    nama: namaInput.value || "",
+    tanggal: tanggalInput.value || "",
+    parts: [part],
+  });
+  renderList();
+  updateDashboardChart();
+  // reset
+  [
+    namaInput,
+    tanggalInput,
+    bendaNameInput,
+    panjangStandar,
+    panjangToleransi,
+    panjangHasil,
+    lebarStandar,
+    lebarToleransi,
+    lebarHasil,
+    tinggiStandar,
+    tinggiToleransi,
+    tinggiHasil,
+  ].forEach((el) => el && (el.value = ""));
+});
+
+// render list
+function renderList() {
+  listContainer.innerHTML = "";
+  qcList.forEach((item, i) => {
+    const avg =
+      item.parts && item.parts.length
+        ? Math.round(
+            item.parts.reduce((s, p) => s + partPercent(p), 0) /
+              item.parts.length
+          )
+        : 0;
+    const div = document.createElement("div");
+    div.className = "qc-card";
+    div.style.cursor = "pointer";
+    div.innerHTML = `<h3>QC-${i + 1}</h3><div>Pemeriksa: ${
+      item.nama
+    }</div><div>Tanggal: ${item.tanggal}</div><div>Kesesuaian: ${avg}%</div>`;
+    div.addEventListener("click", () => openModal(item));
+    listContainer.appendChild(div);
+  });
+}
+
+// charts & modal
+let dashboardChart = null,
+  modalChart = null;
+
+function updateDashboardChart() {
+  const labels = qcList.map((_, i) => `QC-${i + 1}`);
+  const data = qcList.map((it) =>
+    it.parts && it.parts.length
+      ? Math.round(
+          it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length
+        )
+      : 0
+  );
+  const ctx = document.getElementById("qcChart");
+  if (!ctx) return;
+  const bg = data.map((v) =>
+    v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
+  );
+  const cfg = {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{ label: "Kesesuaian (%)", data, backgroundColor: bg }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 100 } },
+    },
+  };
+  if (dashboardChart) {
+    dashboardChart.data.labels = labels;
+    dashboardChart.data.datasets[0].data = data;
+    dashboardChart.data.datasets[0].backgroundColor = bg;
+    dashboardChart.update();
+  } else dashboardChart = new Chart(ctx, cfg);
+}
+
 function renderModalChart(item) {
-    const canvas = document.getElementById("modalChart");
-    if (!canvas) return;
-
-    const labels = item.parts.map((p, i) => `Benda ${i+1}`);
-    const data = item.parts.map(p => {
-        const pct = partMatchPercent(p);
-        if (pct === null) {
-            // gunakan checkPartPass sebagai fallback: PASS => 100, FAIL => 0, else 0
-            const ok = checkPartPass(p);
-            if (ok === true) return 100;
-            if (ok === false) return 0;
-            return 0;
-        }
-        return pct;
-    });
-
-    const colors = data.map(v => v >= 80 ? '#0a9a3f' : v >= 40 ? '#f6b100' : '#d13030');
-
-    if (modalChartInstance) {
-        modalChartInstance.destroy();
-        modalChartInstance = null;
-    }
-
-    modalChartInstance = new Chart(canvas.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Kesesuaian (%) per Benda',
-                data: data,
-                backgroundColor: colors
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true, max: 100 }
-            },
-            plugins: { legend: { display: false } }
-        }
-    });
+  const canvas = document.getElementById("modalChart");
+  if (!canvas) return;
+  const part = (item.parts && item.parts[0]) || null;
+  if (!part) return;
+  const m = part.measurements || {};
+  const data = ["panjang", "lebar", "tinggi"].map((k) => {
+    return (
+      percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ??
+      (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0)
+    );
+  });
+  const colors = data.map((v) =>
+    v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
+  );
+  if (modalChart) {
+    modalChart.destroy();
+    modalChart = null;
+  }
+  modalChart = new Chart(canvas.getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: ["Panjang", "Lebar", "Tinggi"],
+      datasets: [{ data, backgroundColor: colors }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 100 } },
+    },
+  });
 }
 
-// Update openModal untuk menampilkan indikator pass/fail di detail dan chart
 function openModal(item) {
-    document.getElementById("modalKode").textContent = "QC DOCUMENT";
-    document.getElementById("modalNama").textContent = item.nama;
-    document.getElementById("modalProses").textContent = item.parts.map(p => p.proses).join(", ");
-    document.getElementById("modalStandar").textContent = item.parts.map(p => p.standar).join(", ");
-    document.getElementById("modalToleransi").textContent = item.parts.map(p => p.toleransi).join(", ");
-    document.getElementById("modalHasil").textContent = item.parts.map(p => p.hasil).join(", ");
-    document.getElementById("modalTanggal").textContent = item.tanggal;
-
-    // detail dengan indikator
-    document.getElementById("modalDetail").innerHTML = item.parts.map((p,i)=> {
-        const ok = checkPartPass(p);
-        const badge = ok === true ? `<span class="modal-pass">PASS</span>` :
-                      ok === false ? `<span class="modal-fail">FAIL</span>` :
-                      `<span style="color:#666">N/A</span>`;
-        return `
-            <div style="margin-bottom:8px;">
-                <b>Benda ${i+1}</b><br>
-                Benda: ${p.benda}<br>
-                Proses: ${p.proses}<br>
-                Standar: ${p.standar} | Toleransi: ${p.toleransi} | Hasil: ${p.hasil} ${badge}
-            </div>
-        `;
-    }).join("");
-
+  document.getElementById("modalKode").textContent = "QC DOCUMENT";
+  document.getElementById("modalNama").textContent = item.nama;
+  document.getElementById("modalTanggal").textContent = item.tanggal;
+  const part = (item.parts && item.parts[0]) || null;
+  if (!part) {
+    document.getElementById("modalBenda").textContent = "-";
+    ["Panjang", "Lebar", "Tinggi"].forEach((_, i) => {
+      document.getElementById(
+        ["modalPanjang", "modalLebar", "modalTinggi"][i]
+      ).textContent = "-";
+    });
+    document.getElementById("modalDetail").innerHTML =
+      "<div>Tidak ada data benda.</div>";
     document.getElementById("qcModal").style.display = "flex";
+    return;
+  }
+  document.getElementById("modalBenda").textContent = part.benda || "";
+  const m = part.measurements || {};
+  document.getElementById("modalPanjang").textContent = `Std: ${
+    m.panjang?.standar || "-"
+  } | Tol: ±${m.panjang?.toleransi || "-"} | Hasil: ${m.panjang?.hasil || "-"}`;
+  document.getElementById("modalLebar").textContent = `Std: ${
+    m.lebar?.standar || "-"
+  }   | Tol: ±${m.lebar?.toleransi || "-"}   | Hasil: ${m.lebar?.hasil || "-"}`;
+  document.getElementById("modalTinggi").textContent = `Std: ${
+    m.tinggi?.standar || "-"
+  }  | Tol: ±${m.tinggi?.toleransi || "-"}  | Hasil: ${m.tinggi?.hasil || "-"}`;
 
-    // render chart modal
-    renderModalChart(item);
+  const detailHtml = ["panjang", "lebar", "tinggi"]
+    .map((k) => {
+      const mm = m[k] || {};
+      const ok = checkPass(mm.standar, mm.toleransi, mm.hasil);
+      const pct = percentMatch(mm.standar, mm.toleransi, mm.hasil);
+      const badge =
+        ok === true
+          ? `<span class="modal-pass">PASS</span>`
+          : ok === false
+          ? `<span class="modal-fail">FAIL</span>`
+          : `<span style="color:#999">N/A</span>`;
+      const pctText =
+        pct === null
+          ? ok === true
+            ? "100"
+            : ok === false
+            ? "0"
+            : "N/A"
+          : `${pct}%`;
+      return `<div style="margin-bottom:8px;"><b>${
+        k.charAt(0).toUpperCase() + k.slice(1)
+      }</b><br>Std: ${mm.standar || "-"} | Tol: ±${
+        mm.toleransi || "-"
+      } | Hasil: ${mm.hasil || "-"} — ${badge} (${pctText})</div>`;
+    })
+    .join("");
+  document.getElementById("modalDetail").innerHTML = detailHtml;
+  document.getElementById("qcModal").style.display = "flex";
+  renderModalChart(item);
 }
 
-// closeModal juga hapus modalChartInstance
 function closeModal() {
-    document.getElementById("qcModal").style.display = "none";
-    if (modalChartInstance) {
-        modalChartInstance.destroy();
-        modalChartInstance = null;
-    }
+  document.getElementById("qcModal").style.display = "none";
+  if (modalChart) {
+    modalChart.destroy();
+    modalChart = null;
+  }
 }
-
 window.closeModal = closeModal;
 
-// Panggil update dashboard saat inisialisasi (kosong) dan setiap kali data berubah
+// init
 updateDashboardChart();
+
+/* --- Custom select replacer (tidak berubah) --- */
+function initCustomSelects(root = document) {
+  const selects = Array.from(
+    root.querySelectorAll("select.prosesInput, select.themed")
+  );
+  selects.forEach((sel) => {
+    if (sel.dataset._themed) return;
+    sel.dataset._themed = "1";
+    const wrapper = document.createElement("div");
+    wrapper.className = "custom-select";
+    sel.parentNode.insertBefore(wrapper, sel);
+    wrapper.appendChild(sel);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "custom-select__button";
+    btn.setAttribute("aria-haspopup", "listbox");
+    btn.setAttribute("aria-expanded", "false");
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "custom-select__label";
+    labelSpan.textContent =
+      sel.selectedOptions[0]?.text || sel.options[0]?.text || "";
+    const chev = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    chev.setAttribute("viewBox", "0 0 20 20");
+    chev.classList.add("custom-select__chev");
+    chev.setAttribute("aria-hidden", "true");
+    chev.innerHTML =
+      "<polyline points='4 7 10 13 16 7' fill='none' stroke='#eaf6ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/>";
+    btn.appendChild(labelSpan);
+    btn.appendChild(chev);
+    wrapper.appendChild(btn);
+    const list = document.createElement("div");
+    list.className = "custom-select__list";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("tabindex", "-1");
+    wrapper.appendChild(list);
+    Array.from(sel.options).forEach((opt) => {
+      const item = document.createElement("div");
+      item.className = "custom-select__item";
+      item.setAttribute("role", "option");
+      item.setAttribute("data-value", opt.value);
+      if (opt.disabled) item.setAttribute("aria-disabled", "true");
+      if (opt.selected) item.setAttribute("aria-selected", "true");
+      item.textContent = opt.text;
+      item.addEventListener("click", () => {
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        labelSpan.textContent = opt.text;
+        list
+          .querySelectorAll('[role="option"]')
+          .forEach((it) => it.removeAttribute("aria-selected"));
+        item.setAttribute("aria-selected", "true");
+        closeList();
+      });
+      list.appendChild(item);
+    });
+    function openList() {
+      wrapper.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+      list.style.display = "block";
+      const selItem =
+        list.querySelector('[aria-selected="true"]') ||
+        list.querySelector('[role="option"]');
+      if (selItem) selItem.scrollIntoView({ block: "nearest" });
+      document.addEventListener("click", outsideListener);
+      document.addEventListener("keydown", keydownListener);
+    }
+    function closeList() {
+      wrapper.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+      list.style.display = "none";
+      document.removeEventListener("click", outsideListener);
+      document.removeEventListener("keydown", keydownListener);
+    }
+    function toggleList(e) {
+      e.stopPropagation();
+      const isOpen = wrapper.classList.contains("open");
+      if (isOpen) closeList();
+      else openList();
+    }
+    function outsideListener(e) {
+      if (!wrapper.contains(e.target)) closeList();
+    }
+    function keydownListener(e) {
+      const items = Array.from(
+        list.querySelectorAll('[role="option"]:not([aria-disabled="true"])')
+      );
+      if (!items.length) return;
+      const focused =
+        list.querySelector('[data-focus="1"]') ||
+        list.querySelector('[aria-selected="true"]') ||
+        items[0];
+      let idx = items.indexOf(focused);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        idx = Math.min(items.length - 1, Math.max(0, idx + 1));
+        updateFocus(items, idx);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        idx = Math.max(0, idx - 1);
+        updateFocus(items, idx);
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (items[idx]) items[idx].click();
+      } else if (e.key === "Escape") {
+        closeList();
+        btn.focus();
+      }
+    }
+    function updateFocus(items, idx) {
+      items.forEach((it) => it.removeAttribute("data-focus"));
+      const it = items[idx];
+      if (!it) return;
+      it.setAttribute("data-focus", "1");
+      it.scrollIntoView({ block: "nearest" });
+    }
+    btn.addEventListener("click", toggleList);
+    sel.addEventListener("change", () => {
+      const currentOpt = sel.selectedOptions[0];
+      labelSpan.textContent = currentOpt?.text || "";
+      list
+        .querySelectorAll('[role="option"]')
+        .forEach((it) => it.removeAttribute("aria-selected"));
+      const selectedItem = Array.from(
+        list.querySelectorAll('[role="option"]')
+      ).find((it) => it.dataset.value === sel.value);
+      if (selectedItem) selectedItem.setAttribute("aria-selected", "true");
+    });
+    list.style.display = "none";
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof initCustomSelects === "function") initCustomSelects(document);
+});
+
+window.addEventListener("load", () => {
+  if (typeof initCustomSelects === "function") initCustomSelects(document);
+});
