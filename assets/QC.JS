@@ -1,155 +1,156 @@
 // ===============================
 //   DATA QC
 // ===============================
+/* Ringkas, hanya fungsi inti: parsing angka, cek/toleransi, simpan/render, modal/chart */
 let qcList = [];
+const $ = (id) => document.getElementById(id);
 
-const namaInput = document.getElementById("namaInput");
-const tanggalInput = document.getElementById("tanggalInput");
-const saveBtn = document.getElementById("saveBtn");
-const listContainer = document.getElementById("qcList");
+const namaInput = $("namaInput");
+const tanggalInput = $("tanggalInput");
+const saveBtn = $("saveBtn");
+const listContainer = $("qcList");
 
-// measurement inputs
-const bendaNameInput = document.getElementById("bendaNameInput");
-const panjangStandar = document.getElementById("panjangStandar");
-const panjangToleransi = document.getElementById("panjangToleransi");
-const panjangHasil = document.getElementById("panjangHasil");
-const lebarStandar = document.getElementById("lebarStandar");
-const lebarToleransi = document.getElementById("lebarToleransi");
-const lebarHasil = document.getElementById("lebarHasil");
-const tinggiStandar = document.getElementById("tinggiStandar");
-const tinggiToleransi = document.getElementById("tinggiToleransi");
-const tinggiHasil = document.getElementById("tinggiHasil");
+const bendaNameInput = $("bendaNameInput");
+const measurementsArea = $("measurementsArea");
+const btnAddPanjang = $("addPanjangBtn");
+const btnAddLebar = $("addLebarBtn");
+const btnAddDiameter = $("addDiameterBtn");
+const btnAddTinggi = $("addTinggiBtn");
 
-// helpers (fokus: ringkas & aman)
-const toNum = (v) => {
-  if (v === null || v === undefined) return null; // hapus semua karakter selain digit, titik, tanda +/-, dan exponent
-  const cleaned = String(v)
-    .replace(/[^0-9+\-eE.,]/g, "")
-    .replace(",", ".")
+function addMeasurement(type, values = {}) {
+  if (!measurementsArea) return;
+  const key = (type || "").toLowerCase();
+  if (
+    Array.from(measurementsArea.children).some((c) => c.dataset?.type === key)
+  )
+    return;
+  const wrapper = document.createElement("div");
+  wrapper.className = "part";
+  wrapper.dataset.type = key;
+  wrapper.innerHTML = `
+    <div class="part-header">
+      <strong>${type}</strong>
+      <div style="margin-left:auto">
+        <button type="button" class="remove-measurement" title="Hapus" style="background:#d33;color:#fff;border-radius:8px;padding:6px 8px;border:none;cursor:pointer">Hapus</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
+      <input class="m-standar" placeholder="Standar (mm)" value="${
+        values.standar ?? ""
+      }" />
+      <input class="m-toleransi" placeholder="Toleransi ± (mm)" value="${
+        values.toleransi ?? ""
+      }" />
+      <input class="m-hasil" placeholder="Hasil (mm)" value="${
+        values.hasil ?? ""
+      }" />
+    </div>
+  `;
+  measurementsArea.appendChild(wrapper);
+
+  const btnId = `add${type.charAt(0).toUpperCase() + type.slice(1)}Btn`;
+  const relatedBtn = document.getElementById(btnId);
+  if (relatedBtn) relatedBtn.style.display = "none";
+
+  wrapper.querySelector(".remove-measurement").addEventListener("click", () => {
+    wrapper.remove();
+    if (relatedBtn) relatedBtn.style.display = "";
+  });
+}
+
+btnAddPanjang &&
+  btnAddPanjang.addEventListener("click", () => addMeasurement("Panjang"));
+btnAddLebar &&
+  btnAddLebar.addEventListener("click", () => addMeasurement("Lebar"));
+btnAddDiameter &&
+  btnAddDiameter.addEventListener("click", () => addMeasurement("Diameter"));
+btnAddTinggi &&
+  btnAddTinggi.addEventListener("click", () => addMeasurement("Tinggi"));
+
+function gatherMeasurementsFromDOM() {
+  const out = {};
+  if (!measurementsArea) return out;
+  Array.from(measurementsArea.children).forEach((el) => {
+    const type = (el.dataset.type || "").toLowerCase();
+    const s = el.querySelector(".m-standar")?.value ?? "";
+    const t = el.querySelector(".m-toleransi")?.value ?? "";
+    const h = el.querySelector(".m-hasil")?.value ?? "";
+    if (type) out[type] = { standar: s, toleransi: t, hasil: h };
+  });
+  return out;
+}
+
+const cleanNum = (v) => {
+  if (v === null || v === undefined) return null;
+  const s = String(v)
+    .replace(/±/g, "")
+    .replace(/,/g, ".")
+    .replace(/[^0-9+\-eE.]/g, "")
     .trim();
-  if (cleaned === "") return null;
-  const n = Number(cleaned);
+  if (s === "") return null;
+  const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
 
-/**
- * Parse three numeric inputs and return either scaled-integers or raw numbers.
- * - Handles comma as decimal, strips ± and text.
- * - If any value uses exponent notation (e/E) we fallback to Number-based path.
- * - Decimals are scaled up to `maxDecimals` (caps at 8) to perform integer math.
- */
 function _prepareScaled(std, tol, val, maxDecimals = 8) {
-  const clean = (x) =>
+  const fmt = (x) =>
     String(x ?? "")
       .replace(/±/g, "")
-      .replace(/[^0-9+\-eE.,]/g, "")
-      .replace(",", ".")
+      .replace(/,/g, ".")
+      .replace(/[^0-9+\-eE.]/g, "")
       .trim();
-
-  const sStr = clean(std),
-    tStr = clean(tol),
-    hStr = clean(val);
-
-  if (!sStr || !tStr || !hStr) return null; // if exponent forms present, fallback to Number arithmetic (still safe)
-
+  const sStr = fmt(std),
+    tStr = fmt(tol),
+    hStr = fmt(val);
+  if (!sStr || !tStr || !hStr) return null;
   if (/[eE]/.test(sStr + tStr + hStr)) {
     const s = Number(sStr),
       t = Number(tStr),
       h = Number(hStr);
-    if (![s, t, h].every(Number.isFinite)) return null;
-    return { scaled: false, s, t, h, scale: 1 };
+    return [s, t, h].every(Number.isFinite)
+      ? { scaled: false, s, t, h, scale: 1 }
+      : null;
   }
-
-  const decimals = (str) => {
-    const m = str.match(/\.(\d+)/);
-    return m ? m[1].length : 0;
-  };
+  const decimals = (str) => (str.match(/\.(\d+)/) || ["", ""])[1].length;
   const dec = Math.min(
     maxDecimals,
     Math.max(decimals(sStr), decimals(tStr), decimals(hStr))
   );
-  const scale = Math.pow(10, dec);
-
+  const scale = 10 ** dec;
   const s = Math.round(Number(sStr) * scale);
   const t = Math.round(Number(tStr) * scale);
   const h = Math.round(Number(hStr) * scale);
-
-  if (![s, t, h].every((n) => Number.isInteger(n))) return null;
-  return { scaled: true, s, t, h, scale };
+  return [s, t, h].every(Number.isInteger)
+    ? { scaled: true, s, t, h, scale }
+    : null;
 }
 
 function checkPass(std, tol, val) {
   const p = _prepareScaled(std, tol, val);
   if (!p) return null;
-  if (!p.scaled) {
-    // fallback Number path (inclusive)
-    return Math.abs(p.h - p.s) <= Math.abs(p.t);
-  }
-  const diff = Math.abs(p.h - p.s);
-  const absT = Math.abs(p.t);
-  return diff <= absT;
+  return Math.abs(p.h - p.s) <= Math.abs(p.t);
 }
 
-/**
- * FUNGSI INI SUDAH DIKOREKSI (AKURASI DESIMAL)
- * Menghitung kesesuaian secara proporsional: 100.00% (ideal) hingga 1.00% (batas toleransi).
- * Hasil dikembalikan sebagai Number dengan akurasi 2 desimal.
- */
 function percentMatch(std, tol, val) {
   const p = _prepareScaled(std, tol, val);
   if (!p) return null;
-
-  // Definisikan skor minimum untuk komponen yang masih Lolos
-  const MIN_SCORE = 1.0;
-  const SCORE_RANGE = 100.0 - MIN_SCORE; // Rentang skor proporsional adalah 99.0
-
-  let absT, diff;
-
-  // Fungsi pembulatan ke 2 desimal
-  const round2 = (num) => Math.round(num * 100) / 100;
-
-  // --- JALUR 1: STANDARD NUMBER (FLOAT) ARITHMETIC ---
-  if (!p.scaled) {
-    absT = Math.abs(p.t);
-    diff = Math.abs(p.h - p.s);
-
-    if (absT === 0) return diff === 0 ? 100.0 : 0.0;
-
-    if (diff <= absT) {
-      const ratio = 1 - diff / absT;
-      const score = MIN_SCORE + SCORE_RANGE * ratio;
-
-      return round2(Math.max(MIN_SCORE, score));
-    }
-
-    return 0.0;
-  }
-
-  // --- JALUR 2: SCALED INTEGER ARITHMETIC (Math Aman) ---
-  diff = Math.abs(p.h - p.s);
-  absT = Math.abs(p.t);
-
+  const diff = Math.abs(p.h - p.s);
+  const absT = Math.abs(p.t);
   if (absT === 0) return diff === 0 ? 100.0 : 0.0;
-
-  if (diff <= absT) {
-    const proportionalScore = (SCORE_RANGE * (absT - diff)) / absT;
-    const finalScore = MIN_SCORE + proportionalScore;
-
-    return round2(Math.max(MIN_SCORE, Math.min(100.0, finalScore)));
-  }
-
-  return 0.0;
+  if (diff <= absT) return 100.0;
+  const excess = diff - absT;
+  const percent = Math.round((((absT - excess) * 100) / absT) * 100) / 100;
+  return Math.max(0, Math.min(100, percent));
 }
 
 function partPercent(part) {
-  const keys = ["panjang", "lebar", "tinggi"];
+  const meas = part.measurements || {};
+  const keys = Object.keys(meas);
+  if (!keys.length) return 0.0;
   let sum = 0,
     cnt = 0;
-  // Fungsi pembulatan ke 2 desimal
-  const round2 = (num) => Math.round(num * 100) / 100;
-
   keys.forEach((k) => {
-    const m = (part.measurements && part.measurements[k]) || {};
+    const m = meas[k] || {};
     const p = percentMatch(m.standar, m.toleransi, m.hasil);
     if (p !== null) {
       sum += p;
@@ -157,76 +158,57 @@ function partPercent(part) {
     } else {
       const ok = checkPass(m.standar, m.toleransi, m.hasil);
       if (ok === true) {
-        sum += 100.0;
+        sum += 100;
         cnt++;
       } else if (ok === false) {
-        sum += 0.0;
+        sum += 0;
         cnt++;
       }
     }
-  }); // Pembulatan rata-rata akhir ke 2 desimal
-  return cnt ? round2(sum / cnt) : 0.0;
+  });
+  return cnt ? Math.round((sum / cnt) * 100) / 100 : 0.0;
 }
 
-// save single-part QC
-saveBtn.addEventListener("click", () => {
-  const part = {
-    benda: bendaNameInput.value || "",
-    measurements: {
-      panjang: {
-        standar: panjangStandar.value,
-        toleransi: panjangToleransi.value,
-        hasil: panjangHasil.value,
-      },
-      lebar: {
-        standar: lebarStandar.value,
-        toleransi: lebarToleransi.value,
-        hasil: lebarHasil.value,
-      },
-      tinggi: {
-        standar: tinggiStandar.value,
-        toleransi: tinggiToleransi.value,
-        hasil: tinggiHasil.value,
-      },
-    },
-  };
-  qcList.push({
-    nama: namaInput.value || "",
-    tanggal: tanggalInput.value || "",
-    parts: [part],
+saveBtn &&
+  saveBtn.addEventListener("click", () => {
+    const part = {
+      benda: bendaNameInput?.value || "",
+      measurements: gatherMeasurementsFromDOM(),
+    };
+    qcList.push({
+      nama: namaInput?.value || "",
+      tanggal: tanggalInput?.value || "",
+      parts: [part],
+    });
+    renderList();
+    updateDashboardChart();
+    [namaInput, tanggalInput, bendaNameInput].forEach(
+      (el) => el && (el.value = "")
+    );
+    if (measurementsArea) {
+      measurementsArea.innerHTML = "";
+      [
+        "addPanjangBtn",
+        "addLebarBtn",
+        "addDiameterBtn",
+        "addTinggiBtn",
+      ].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.style.display = "";
+      });
+    }
   });
-  renderList();
-  updateDashboardChart(); // reset
-  [
-    namaInput,
-    tanggalInput,
-    bendaNameInput,
-    panjangStandar,
-    panjangToleransi,
-    panjangHasil,
-    lebarStandar,
-    lebarToleransi,
-    lebarHasil,
-    tinggiStandar,
-    tinggiToleransi,
-    tinggiHasil,
-  ].forEach((el) => el && (el.value = ""));
-});
 
-// render list
 function renderList() {
   listContainer.innerHTML = "";
   qcList.forEach((item, i) => {
-    // Menghitung rata-rata (tanpa pembulatan awal)
     const avg =
       item.parts && item.parts.length
         ? item.parts.reduce((s, p) => s + partPercent(p), 0) / item.parts.length
-        : 0.0;
-
+        : 0;
     const div = document.createElement("div");
     div.className = "qc-card";
     div.style.cursor = "pointer";
-    // Menggunakan toFixed(2) untuk tampilan 2 desimal
     div.innerHTML = `<h3>QC-${i + 1}</h3><div>Pemeriksa: ${
       item.nama
     }</div><div>Tanggal: ${item.tanggal}</div><div>Kesesuaian: ${avg.toFixed(
@@ -237,7 +219,6 @@ function renderList() {
   });
 }
 
-// charts & modal
 let dashboardChart = null,
   modalChart = null;
 
@@ -245,10 +226,10 @@ function updateDashboardChart() {
   const labels = qcList.map((_, i) => `QC-${i + 1}`);
   const data = qcList.map((it) =>
     it.parts && it.parts.length
-      ? it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length // tidak dibulatkan
+      ? it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length
       : 0
   );
-  const ctx = document.getElementById("qcChart");
+  const ctx = $("qcChart");
   if (!ctx) return;
   const bg = data.map((v) =>
     v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
@@ -274,16 +255,18 @@ function updateDashboardChart() {
 }
 
 function renderModalChart(item) {
-  const canvas = document.getElementById("modalChart");
+  const canvas = $("modalChart");
   if (!canvas) return;
   const part = (item.parts && item.parts[0]) || null;
   if (!part) return;
   const m = part.measurements || {};
-  const data = ["panjang", "lebar", "tinggi"].map((k) => {
-    const p = percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil);
-    // gunakan nilai decimal dari percentMatch, fallback ke 100/0 sesuai checkPass
-    return p ?? (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0);
-  });
+  const keys = Object.keys(m);
+  const data = keys.map(
+    (k) =>
+      percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ??
+      (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0)
+  );
+  const labels = keys.map((k) => k.charAt(0).toUpperCase() + k.slice(1));
   const colors = data.map((v) =>
     v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
   );
@@ -293,10 +276,7 @@ function renderModalChart(item) {
   }
   modalChart = new Chart(canvas.getContext("2d"), {
     type: "bar",
-    data: {
-      labels: ["Panjang", "Lebar", "Tinggi"],
-      datasets: [{ data, backgroundColor: colors }],
-    },
+    data: { labels, datasets: [{ data, backgroundColor: colors }] },
     options: {
       responsive: true,
       plugins: { legend: { display: false } },
@@ -306,45 +286,37 @@ function renderModalChart(item) {
 }
 
 function openModal(item) {
-  document.getElementById("modalKode").textContent = "QC DOCUMENT";
-  document.getElementById("modalNama").textContent = item.nama;
-  document.getElementById("modalTanggal").textContent = item.tanggal;
+  $("modalKode").textContent = "QC DOCUMENT";
+  $("modalNama").textContent = item.nama;
+  $("modalTanggal").textContent = item.tanggal;
   const part = (item.parts && item.parts[0]) || null;
   if (!part) {
-    document.getElementById("modalBenda").textContent = "-";
-    ["Panjang", "Lebar", "Tinggi"].forEach((_, i) => {
-      document.getElementById(
-        ["modalPanjang", "modalLebar", "modalTinggi"][i]
-      ).textContent = "-";
-    });
-    document.getElementById("modalDetail").innerHTML =
-      "<div>Tidak ada data benda.</div>";
-    document.getElementById("qcModal").style.display = "flex";
+    $("modalBenda").textContent = "-";
+    $("modalDetail").innerHTML = "<div>Tidak ada data benda.</div>";
+    $("qcModal").style.display = "flex";
     return;
   }
-  document.getElementById("modalBenda").textContent = part.benda || "";
+  $("modalBenda").textContent = part.benda || "";
   const m = part.measurements || {};
-  document.getElementById("modalPanjang").textContent = `Std: ${
-    m.panjang?.standar || "-"
-  } | Tol: ±${m.panjang?.toleransi || "-"} | Hasil: ${m.panjang?.hasil || "-"}`;
-  document.getElementById("modalLebar").textContent = `Std: ${
-    m.lebar?.standar || "-"
-  }   | Tol: ±${m.lebar?.toleransi || "-"}   | Hasil: ${m.lebar?.hasil || "-"}`;
-  document.getElementById("modalTinggi").textContent = `Std: ${
-    m.tinggi?.standar || "-"
-  }  | Tol: ±${m.tinggi?.toleransi || "-"}  | Hasil: ${m.tinggi?.hasil || "-"}`;
-
-  const detailHtml = ["panjang", "lebar", "tinggi"]
+  $("modalSummaryList").textContent = Object.keys(m)
+    .map(
+      (k) =>
+        `${k.charAt(0).toUpperCase() + k.slice(1)}: Std ${
+          m[k].standar || "-"
+        } Tol ±${m[k].toleransi || "-"} Hasil ${m[k].hasil || "-"}`
+    )
+    .join(" | ");
+  const detailHtml = Object.keys(m)
     .map((k) => {
       const mm = m[k] || {};
       const ok = checkPass(mm.standar, mm.toleransi, mm.hasil);
       const pct = percentMatch(mm.standar, mm.toleransi, mm.hasil);
       const badge =
         ok === true
-          ? `<span class="modal-pass">PASS</span>`
+          ? '<span class="modal-pass">PASS</span>'
           : ok === false
-          ? `<span class="modal-fail">FAIL</span>`
-          : `<span style="color:#999">N/A</span>`;
+          ? '<span class="modal-fail">FAIL</span>'
+          : '<span style="color:#999">N/A</span>';
       const pctText =
         pct === null
           ? ok === true
@@ -360,13 +332,13 @@ function openModal(item) {
       } | Hasil: ${mm.hasil || "-"} — ${badge} (${pctText})</div>`;
     })
     .join("");
-  document.getElementById("modalDetail").innerHTML = detailHtml;
-  document.getElementById("qcModal").style.display = "flex";
+  $("modalDetail").innerHTML = detailHtml;
+  $("qcModal").style.display = "flex";
   renderModalChart(item);
 }
 
 function closeModal() {
-  document.getElementById("qcModal").style.display = "none";
+  $("qcModal").style.display = "none";
   if (modalChart) {
     modalChart.destroy();
     modalChart = null;
@@ -374,7 +346,6 @@ function closeModal() {
 }
 window.closeModal = closeModal;
 
-// init
 updateDashboardChart();
 
 /* --- Custom select replacer (tidak berubah) --- */

@@ -40,7 +40,6 @@ body {
 /* header/nav/container */
 header {
   width: 100%;
-  margin: 0;
   padding: 18px 22px;
   background: linear-gradient(
     135deg,
@@ -70,7 +69,6 @@ header {
   font-weight: 500;
   color: rgba(234, 246, 255, 0.9);
 }
-
 nav {
   max-width: 1100px;
   margin: 10px auto 24px;
@@ -166,8 +164,6 @@ textarea:focus {
   box-shadow: 0 10px 36px rgba(10, 160, 255, 0.08);
   transform: translateY(-1px);
 }
-
-/* buttons */
 button {
   background: linear-gradient(90deg, var(--primary), var(--primary-700));
   color: #fff;
@@ -187,8 +183,6 @@ button:hover {
   margin-top: 10px;
   width: 100%;
 }
-
-/* parts / parts-area */
 .parts-area {
   padding: 12px;
   margin-bottom: 12px;
@@ -222,8 +216,6 @@ button:hover {
   font-size: 15px;
   color: var(--accent);
 }
-
-/* QC card */
 .qc-card {
   display: flex;
   flex-direction: column;
