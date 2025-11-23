@@ -267,11 +267,10 @@ let dashboardChart = null,
 
 function updateDashboardChart() {
   const labels = qcList.map((_, i) => `QC-${i + 1}`);
+  // gunakan nilai persis dari partPercent (tanpa pembulatan tambahan)
   const data = qcList.map((it) =>
     it.parts && it.parts.length
-      ? Math.round(
-          it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length
-        ) // Bulatkan ke int untuk Chart
+      ? it.parts.reduce((s, p) => s + partPercent(p), 0) / it.parts.length
       : 0
   );
   const ctx = $("qcChart");
@@ -287,7 +286,19 @@ function updateDashboardChart() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            // tampilkan nilai persis sesuai perhitungan (2 desimal, sesuai partPercent)
+            label: (ctx) => {
+              const raw = ctx.raw;
+              if (raw === null || raw === undefined || isNaN(raw)) return "N/A";
+              return `${ctx.dataset.label || ""}: ${Number(raw).toFixed(2)}%`;
+            },
+          },
+        },
+      },
       scales: { y: { beginAtZero: true, max: 100 } },
     },
   };
@@ -306,12 +317,12 @@ function renderModalChart(item) {
   if (!part) return;
   const m = part.measurements || {};
   const keys = Object.keys(m);
-  const data = keys.map((k) =>
-    Math.round(
-      percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ?? // Bulatkan untuk tampilan Chart
-        (checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100 : 0)
-    )
-  );
+  // gunakan nilai persis dari percentMatch / fallback checkPass (100) tanpa pembulatan lagi
+  const data = keys.map((k) => {
+    const p = percentMatch(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil);
+    if (p !== null && !isNaN(p)) return p;
+    return checkPass(m[k]?.standar, m[k]?.toleransi, m[k]?.hasil) ? 100.0 : 0.0;
+  });
   const labels = keys.map((k) => k.charAt(0).toUpperCase() + k.slice(1));
   const colors = data.map((v) =>
     v >= 80 ? "#0a9a3f" : v >= 40 ? "#f6b100" : "#d13030"
@@ -325,7 +336,18 @@ function renderModalChart(item) {
     data: { labels, datasets: [{ data, backgroundColor: colors }] },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const raw = ctx.raw;
+              if (raw === null || raw === undefined || isNaN(raw)) return "N/A";
+              return `${ctx.label}: ${Number(raw).toFixed(2)}%`;
+            },
+          },
+        },
+      },
       scales: { y: { beginAtZero: true, max: 100 } },
     },
   });
